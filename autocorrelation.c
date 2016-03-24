@@ -191,7 +191,6 @@ double *aCorrUpTo( uint8_t *buffer, uint64_t n, int k )
     // Computing correlations using MPFR 256bits precision floats ...
     mpfr_set_ui(M,  m,     MPFR_RNDN);
     mpfr_set_ui(N,  n,  MPFR_RNDN);
-    mpfr_set_ui(K,  k,     MPFR_RNDN);
     for (uint64_t j=0; j<k; j++)
     {
         // Corrections
@@ -200,11 +199,12 @@ double *aCorrUpTo( uint8_t *buffer, uint64_t n, int k )
         {
             bk += buffer[l];
         }
-        for (uint64_t l=0; l<k; l++)
+        for (uint64_t l=0; l<j; l++)
         {
             bk += buffer[l];
         }
         // Converting j-specific values to high-precision floats
+        mpfr_set_ui(K,  j,     MPFR_RNDN);
         mpfr_set_ui(Rk, rk[j], MPFR_RNDN);
         mpfr_set_ui(Bk, bk,    MPFR_RNDN);
         // The real calculation, result stored in R.
