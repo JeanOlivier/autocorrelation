@@ -226,6 +226,90 @@ double *aCorrUpTo( uint8_t *buffer, uint64_t n, int k )
     return r;
 }
 
+double *aCorrUpToBit( uint8_t *buffer, uint64_t n, int k , int NthB)
+{
+    #define BITMASK(A) A>>NthB & 1
+    #define BITMASK_AND(A,B) BITMASK(A) & BITMASK(B)
+
+    // Accumulators
+    uint64_t m = 0;
+    uint64_t *rk = (uint64_t *) calloc(k, sizeof(uint64_t)); // Filled with 0s.
+    
+    double *r = (double *) malloc(k*sizeof(double)); // Return buffer
+    uint64_t bk; // Temporary variable for corrections
+
+    mpfr_t R,Rk,M,N,K,Bk,V; // High precision floats for final calculation
+    mpfr_inits2(256, R, Rk, M, N, K, Bk, V, NULL); // 256bits floats, ~71 decimal digits
+    
+    // Accumulating...
+    #pragma omp parallel // Mods made for omp can be suboptimal for single thread
+    {
+        // Local arrays avoid race conditions and segfault problems
+        uint64_t *rk_local = (uint64_t *) calloc(k, sizeof(uint64_t));
+        #pragma omp for reduction(+:m)
+        for (uint64_t i=0; i<n-k; i++)
+        {
+            m += (uint64_t)BITMASK(buffer[i]);
+            for (uint64_t j=0; j<k; j++)
+            {
+                rk_local[j] += (uint64_t)BITMASK_AND(buffer[i], buffer[i+j]);
+            }
+        }
+        #pragma omp for reduction(+:m)
+        for (uint64_t i=n-k; i<n; i++)
+        {
+            m += (uint64_t)BITMASK(buffer[i]);
+            for ( uint64_t j=0; j<n-i; j++)
+            {
+                rk_local[j] += (uint64_t)BITMASK_AND(buffer[i], buffer[i+j]);
+            }
+        }
+        #pragma omp critical // Manual reduction of local arrays to the main one
+        for (uint64_t j=0; j<k; j++)
+        {
+            rk[j] += rk_local[j];
+        }
+    }
+
+    // Computing correlations using MPFR 256bits precision floats ...
+    mpfr_set_ui(M,  m,     MPFR_RNDN);
+    mpfr_set_ui(N,  n,  MPFR_RNDN);
+    for (uint64_t j=0; j<k; j++)
+    {
+        // Corrections
+        bk = 0;
+        for (uint64_t l=n-j; l<n; l++) 
+        {
+            bk += BITMASK(buffer[l]);
+            //bk += (buffer[l] & b);
+        }
+        for (uint64_t l=0; l<j; l++)
+        {
+            bk += BITMASK(buffer[l]);
+            //bk += (buffer[l] & b);
+        }
+        // Converting j-specific values to high-precision floats
+        mpfr_set_ui(K,  j,     MPFR_RNDN);
+        mpfr_set_ui(Rk, rk[j], MPFR_RNDN);
+        mpfr_set_ui(Bk, bk,    MPFR_RNDN);
+        // The real calculation, result stored in R.
+        calc_corr(R, Rk, M, N, K, Bk, MPFR_RNDN);
+
+        // Storing the variance in V for future usage
+        if (j==0) 
+        {
+            mpfr_set(V,R, MPFR_RNDN);
+        }
+        // Dividing by the variance for normalisation
+        mpfr_div(R, R, V, MPFR_RNDN);
+        r[j] = mpfr_get_d(R, MPFR_RNDN);
+    }
+    
+    mpfr_clears(R, Rk, M, N, K, Bk, V, NULL);
+    free(rk);
+    
+    return r;
+}
 
 double aCorrk_double( uint8_t *buffer, uint64_t size, int k)
 {
@@ -354,7 +438,7 @@ int main(int argc, char *argv[])
 
    
    double *f;
-   f = aCorrUpTo(buffer, size, k);
+   f = aCorrUpToBit(buffer, size, k, 3);
    // Printing an easy to paste into python format, for testing.
    printf("\nMPFR:\nf = array([");
    for (int i=0; i<k-1 ; i++)
