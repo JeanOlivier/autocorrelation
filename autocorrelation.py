@@ -3,7 +3,6 @@
 
 import ctypes
 import os
-import subprocess
 from numpy.ctypeslib import ndpointer  
 
 if not os.path.isfile("./autocorrelation.so"):
