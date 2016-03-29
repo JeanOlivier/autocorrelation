@@ -438,7 +438,7 @@ int main(int argc, char *argv[])
 
    
    double *f;
-   f = aCorrUpToBit(buffer, size, k, 3);
+   f = aCorrUpTo(buffer, size, k);
    // Printing an easy to paste into python format, for testing.
    printf("\nMPFR:\nf = array([");
    for (int i=0; i<k-1 ; i++)
