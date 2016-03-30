@@ -120,11 +120,11 @@ void aCorrk_UnNormalized(mpfr_t R, uint8_t *buffer, uint64_t size, int k)
     mpfr_t Rk,M,N,K,Bk;//,R;
     mpfr_inits2(p, Rk, M, N, K, Bk, NULL);// R, NULL);   
    
-    mpfr_set_ui(Rk, rk,   MPFR_RNDN);
-    mpfr_set_ui(M,  m,    MPFR_RNDN);
-    mpfr_set_ui(N,  size, MPFR_RNDN);
-    mpfr_set_ui(K,  k,    MPFR_RNDN);
-    mpfr_set_ui(Bk, bk,   MPFR_RNDN);
+    mpfr_set_uj(Rk, rk,   MPFR_RNDN);
+    mpfr_set_uj(M,  m,    MPFR_RNDN);
+    mpfr_set_uj(N,  size, MPFR_RNDN);
+    mpfr_set_uj(K,  k,    MPFR_RNDN);
+    mpfr_set_uj(Bk, bk,   MPFR_RNDN);
     
     calc_corr(R, Rk, M, N, K, Bk, MPFR_RNDN);
     
