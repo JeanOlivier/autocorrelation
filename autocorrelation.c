@@ -189,8 +189,8 @@ double *aCorrUpTo( uint8_t *buffer, uint64_t n, int k )
     }
 
     // Computing correlations using MPFR 256bits precision floats ...
-    mpfr_set_ui(M,  m,     MPFR_RNDN);
-    mpfr_set_ui(N,  n,  MPFR_RNDN);
+    mpfr_set_uj(M,  m,  MPFR_RNDN);
+    mpfr_set_uj(N,  n,  MPFR_RNDN);
     for (uint64_t j=0; j<k; j++)
     {
         // Corrections
@@ -204,9 +204,9 @@ double *aCorrUpTo( uint8_t *buffer, uint64_t n, int k )
             bk += buffer[l];
         }
         // Converting j-specific values to high-precision floats
-        mpfr_set_ui(K,  j,     MPFR_RNDN);
-        mpfr_set_ui(Rk, rk[j], MPFR_RNDN);
-        mpfr_set_ui(Bk, bk,    MPFR_RNDN);
+        mpfr_set_uj(K,  j,     MPFR_RNDN);
+        mpfr_set_uj(Rk, rk[j], MPFR_RNDN);
+        mpfr_set_uj(Bk, bk,    MPFR_RNDN);
         // The real calculation, result stored in R.
         calc_corr(R, Rk, M, N, K, Bk, MPFR_RNDN);
 
@@ -228,8 +228,8 @@ double *aCorrUpTo( uint8_t *buffer, uint64_t n, int k )
 
 double *aCorrUpToBit( uint8_t *buffer, uint64_t n, int k , int NthB)
 {
-    #define BITMASK(A) A>>NthB & 1
-    #define BITMASK_AND(A,B) BITMASK(A) & BITMASK(B)
+    #define BITMASK(A) (A>>NthB & 1)
+    #define BITMASK_AND(A,B) (BITMASK(A) & BITMASK(B))
 
     // Accumulators
     uint64_t m = 0;
@@ -272,8 +272,8 @@ double *aCorrUpToBit( uint8_t *buffer, uint64_t n, int k , int NthB)
     }
 
     // Computing correlations using MPFR 256bits precision floats ...
-    mpfr_set_ui(M,  m,     MPFR_RNDN);
-    mpfr_set_ui(N,  n,  MPFR_RNDN);
+    mpfr_set_uj(M,  m,  MPFR_RNDN);
+    mpfr_set_uj(N,  n,  MPFR_RNDN);
     for (uint64_t j=0; j<k; j++)
     {
         // Corrections
@@ -281,17 +281,15 @@ double *aCorrUpToBit( uint8_t *buffer, uint64_t n, int k , int NthB)
         for (uint64_t l=n-j; l<n; l++) 
         {
             bk += BITMASK(buffer[l]);
-            //bk += (buffer[l] & b);
         }
         for (uint64_t l=0; l<j; l++)
         {
             bk += BITMASK(buffer[l]);
-            //bk += (buffer[l] & b);
         }
         // Converting j-specific values to high-precision floats
-        mpfr_set_ui(K,  j,     MPFR_RNDN);
-        mpfr_set_ui(Rk, rk[j], MPFR_RNDN);
-        mpfr_set_ui(Bk, bk,    MPFR_RNDN);
+        mpfr_set_uj(K,  j,     MPFR_RNDN);
+        mpfr_set_uj(Rk, rk[j], MPFR_RNDN);
+        mpfr_set_uj(Bk, bk,    MPFR_RNDN);
         // The real calculation, result stored in R.
         calc_corr(R, Rk, M, N, K, Bk, MPFR_RNDN);
 
@@ -447,6 +445,17 @@ int main(int argc, char *argv[])
    }
    printf("%0.15f])\n",f[k-1]);
    
+   /*
+   f = aCorrUpToBit(buffer, size, k, 7);
+   // Printing an easy to paste into python format, for testing.
+   printf("\n7th bit:\nf = array([");
+   for (int i=0; i<k-1 ; i++)
+   {
+     printf("%0.15f, ", f[i]);
+   }
+   printf("%0.15f])\n",f[k-1]);
+   */
+
    
    
    /*f = aCorrUpTo_double(buffer, size, k);

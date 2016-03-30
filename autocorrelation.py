@@ -3,13 +3,22 @@
 
 import ctypes
 import os
-
+import platform
 from numpy.ctypeslib import ndpointer  
 
-if not os.path.isfile("./autocorrelation_shared.so"):
-    raise IOError("autocorrelation_shared.so is missing. To compile on unix:\ngcc -O3 -fPIC -shared autocorrelation.c -o autocorrelation_shared.so -Wall -lmpfr -lgmp -fopenmp -DUNIX\n")
+plat_info = dict(plat=platform.system())
+if plat_info['plat'] == 'Windows':
+    plat_info['lib'] = './autocorrelation_shared.dll'
+    plat_info['com'] = '(mingw-w64 under cygwin) x86_64-w64-mingw32-gcc.exe -std=c99 -O3 -fPIC -shared autocorrelation.c -o autocorrelation_shared.dll -Wall -lmpfr -lgmp -fopenmp'
+else:
+    plat_info['lib'] = './autocorrelation_shared.so'
+    plat_info['com'] = 'gcc -O3 -fPIC -shared autocorrelation.c -o autocorrelation_shared.so -Wall -lmpfr -lgmp -fopenmp'
 
-lib = ctypes.cdll["./autocorrelation_shared.so"] # autocorelation.so wouldn't worlk
+
+if not os.path.isfile(plat_info['lib']):
+    raise IOError("{lib} is missing. To compile on {plat}:\n{com}\n".format(**plat_info))
+
+lib = ctypes.cdll[plat_info['lib']]
 
 def aCorrUpTo(x, k, n=None):
     """
