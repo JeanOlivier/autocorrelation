@@ -3,12 +3,13 @@
 
 import ctypes
 import os
+
 from numpy.ctypeslib import ndpointer  
 
-if not os.path.isfile("./autocorrelation.so"):
-    print("autocorrelation.so is missing. To compile on unix:\ngcc -O3 -fPIC -shared autocorrelation.c -o autocorrelation.so -Wall -lmpfr -lgmp -fopenmp -DUNIX\n")
+if not os.path.isfile("./autocorrelation_shared.so"):
+    raise IOError("autocorrelation_shared.so is missing. To compile on unix:\ngcc -O3 -fPIC -shared autocorrelation.c -o autocorrelation_shared.so -Wall -lmpfr -lgmp -fopenmp -DUNIX\n")
 
-lib = ctypes.cdll["./autocorrelation.so"]
+lib = ctypes.cdll["./autocorrelation_shared.so"] # autocorelation.so wouldn't worlk
 
 def aCorrUpTo(x, k, n=None):
     """
