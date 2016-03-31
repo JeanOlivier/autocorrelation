@@ -31,5 +31,5 @@ def aCorrUpTo(x, k, n=None):
            "Invalid n or k. Condition is: (n is None or (0 <= n <= 7)) and k>0"
     fct = lib.aCorrUpTo if n is None else lib.aCorrUpToBit
     fct.restype = ndpointer(dtype=ctypes.c_double, shape=(k,))
-    return fct(x, len(x), k) if n is None else fct(x, len(x), k, n)
+    return fct(x, ctypes.c_uint64(len(x)), k) if n is None else fct(x, ctypes.c_uint64(len(x)), k, n)
 
