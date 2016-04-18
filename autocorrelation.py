@@ -4,7 +4,8 @@
 import ctypes
 import os
 import platform
-from numpy.ctypeslib import ndpointer  
+from numpy.ctypeslib import ndpointer
+from numpy import zeros, fromstring
 
 plat_info = dict(plat=platform.system())
 if plat_info['plat'] == 'Windows':
@@ -30,6 +31,16 @@ def aCorrUpTo(x, k, n=None):
     assert (n is None or (0 <= n <= 7)) and k>0, \
            "Invalid n or k. Condition is: (n is None or (0 <= n <= 7)) and k>0"
     fct = lib.aCorrUpTo if n is None else lib.aCorrUpToBit
-    fct.restype = ndpointer(dtype=ctypes.c_double, shape=(k,))
-    return fct(x, ctypes.c_uint64(len(x)), k) if n is None else fct(x, ctypes.c_uint64(len(x)), k, n)
+    #fct.restype = ndpointer(dtype=ctypes.c_double, shape=(k,))
+    fct.argtype = (ndpointer(dtype=ctypes.c_uint8, shape=(len(x),)),
+                   ctypes.c_uint64, 
+                   ndpointer(dtype=ctypes.c_double, shape=(k,)),
+                   ctypes.c_int64)
+
+    r = zeros(k).tostring()
+    fct(x, ctypes.c_uint64(len(x)), r, k) if n is None else fct(x, ctypes.c_uint64(len(x)), r, k, n)
+
+    return fromstring(r)
+
+
 

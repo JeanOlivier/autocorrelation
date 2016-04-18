@@ -146,13 +146,11 @@ double aCorrk(uint8_t *buffer, uint64_t size, int k)
     return r;
 }
 
-double *aCorrUpTo( uint8_t *buffer, uint64_t n, int k )
+void aCorrUpTo( uint8_t *buffer, uint64_t n, double *r, int k )
 {
     // Accumulators
     uint64_t m = 0;
     uint64_t *rk = (uint64_t *) calloc(k, sizeof(uint64_t)); // Filled with 0s.
-    
-    double *r = (double *) malloc(k*sizeof(double)); // Return buffer
     uint64_t bk; // Temporary variable for corrections
 
     mpfr_t R,Rk,M,N,K,Bk,V; // High precision floats for final calculation
@@ -222,11 +220,9 @@ double *aCorrUpTo( uint8_t *buffer, uint64_t n, int k )
     
     mpfr_clears(R, Rk, M, N, K, Bk, V, NULL);
     free(rk);
-    
-    return r;
 }
 
-double *aCorrUpToBit( uint8_t *buffer, uint64_t n, int k , int NthB)
+void aCorrUpToBit( uint8_t *buffer, uint64_t n, double *r, int k , int NthB)
 {
     #define BITMASK(A) (A>>NthB & 1)
     #define BITMASK_AND(A,B) (BITMASK(A) & BITMASK(B))
@@ -234,8 +230,6 @@ double *aCorrUpToBit( uint8_t *buffer, uint64_t n, int k , int NthB)
     // Accumulators
     uint64_t m = 0;
     uint64_t *rk = (uint64_t *) calloc(k, sizeof(uint64_t)); // Filled with 0s.
-    
-    double *r = (double *) malloc(k*sizeof(double)); // Return buffer
     uint64_t bk; // Temporary variable for corrections
 
     mpfr_t R,Rk,M,N,K,Bk,V; // High precision floats for final calculation
@@ -305,8 +299,6 @@ double *aCorrUpToBit( uint8_t *buffer, uint64_t n, int k , int NthB)
     
     mpfr_clears(R, Rk, M, N, K, Bk, V, NULL);
     free(rk);
-    
-    return r;
 }
 
 double aCorrk_double( uint8_t *buffer, uint64_t size, int k)
@@ -327,10 +319,9 @@ double aCorrk_double( uint8_t *buffer, uint64_t size, int k)
     return m;
 }
 
-double *aCorrUpTo_double( uint8_t *buffer, uint64_t size, int k )
+void aCorrUpTo_double( uint8_t *buffer, uint64_t size, double *r, int k )
 {
     double m = mean( buffer, size );
-    double *r = (double *) calloc(k, sizeof(double)); // Filled with 0s.
     double r0;
 
     uint64_t i=0;
@@ -354,8 +345,6 @@ double *aCorrUpTo_double( uint8_t *buffer, uint64_t size, int k )
     {
         r[size-i] /= (i*r0);   // divide by (N-k)*variance
     }
-    
-    return r;
 }
 
 int readBig(uint8_t *buffer, uint64_t size, FILE *fp)
@@ -434,17 +423,55 @@ int main(int argc, char *argv[])
    printf("\nMean: %0.20f\n",g);
    */
 
-   
-   double *f;
-   f = aCorrUpTo(buffer, size, k);
+
+   ////////////////////
+   // aCorrUpTo TEST //
+   //////////////////// 
+
+   // Result buffer, filled with 0 for compatibility with *_double* versions.   
+   double *f = (double *) calloc(k, sizeof(double)); 
+   aCorrUpTo(buffer, size, f, k);
    // Printing an easy to paste into python format, for testing.
-   printf("\nMPFR:\nf = array([");
+   printf("\nByte:\nf = array([");
    for (int i=0; i<k-1 ; i++)
    {
      printf("%0.15f, ", f[i]);
    }
    printf("%0.15f])\n",f[k-1]);
-   
+
+   free(f);
+
+   ///////////////////////
+   // aCorrUpToBit TEST //
+   ///////////////////////
+
+   // Result buffer, filled with 0 for compatibility with *_double* versions.   
+   double *g = (double *) calloc(k, sizeof(double)); 
+   aCorrUpToBit(buffer, size, g, k, 0);
+   // Printing an easy to paste into python format, for testing.
+   printf("\nbit0:\nf = array([");
+   for (int i=0; i<k-1 ; i++)
+   {
+     printf("%0.15f, ", f[i]);
+   }
+   printf("%0.15f])\n",f[k-1]);
+
+   free(g);
+
+   // Result buffer, filled with 0 for compatibility with *_double* versions.   
+   double *h = (double *) calloc(k, sizeof(double)); 
+   aCorrUpToBit(buffer, size, h, k, 7);
+   // Printing an easy to paste into python format, for testing.
+   printf("\nbit7:\nf = array([");
+   for (int i=0; i<k-1 ; i++)
+   {
+     printf("%0.15f, ", f[i]);
+   }
+   printf("%0.15f])\n",f[k-1]);
+
+   free(h);
+
+  
    /*
    f = aCorrUpToBit(buffer, size, k, 7);
    // Printing an easy to paste into python format, for testing.
