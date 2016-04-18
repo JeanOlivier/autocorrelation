@@ -452,9 +452,9 @@ int main(int argc, char *argv[])
    printf("\nbit0:\nf = array([");
    for (int i=0; i<k-1 ; i++)
    {
-     printf("%0.15f, ", f[i]);
+     printf("%0.15f, ", g[i]);
    }
-   printf("%0.15f])\n",f[k-1]);
+   printf("%0.15f])\n",g[k-1]);
 
    free(g);
 
@@ -465,9 +465,9 @@ int main(int argc, char *argv[])
    printf("\nbit7:\nf = array([");
    for (int i=0; i<k-1 ; i++)
    {
-     printf("%0.15f, ", f[i]);
+     printf("%0.15f, ", h[i]);
    }
-   printf("%0.15f])\n",f[k-1]);
+   printf("%0.15f])\n",h[k-1]);
 
    free(h);
 
