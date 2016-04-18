@@ -184,6 +184,7 @@ void aCorrUpTo( uint8_t *buffer, uint64_t n, double *r, int k )
         {
             rk[j] += rk_local[j];
         }
+        free(rk_local);
     }
 
     // Computing correlations using MPFR 256bits precision floats ...
@@ -263,6 +264,7 @@ void aCorrUpToBit( uint8_t *buffer, uint64_t n, double *r, int k , int NthB)
         {
             rk[j] += rk_local[j];
         }
+        free(rk_local);
     }
 
     // Computing correlations using MPFR 256bits precision floats ...
