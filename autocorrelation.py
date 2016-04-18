@@ -28,10 +28,10 @@ def aCorrUpTo(x, k, n=None):
     If n is None, it calculates it on the whole bytes. 
     Otherwise it calculates it on the nth bit of each byte.
     """
-    assert (n is None or (0 <= n <= 7)) and k>0, \
-           "Invalid n or k. Condition is: (n is None or (0 <= n <= 7)) and k>0"
+    assert n in [None]+range(0,8) and k>0, \
+           "Invalid n or k. Condition is: n in [None]+range(0,8) and k>0"
+    n = int(n) # If n = 3.0 it passes the assertion so we make it 3
     fct = lib.aCorrUpTo if n is None else lib.aCorrUpToBit
-    #fct.restype = ndpointer(dtype=ctypes.c_double, shape=(k,))
     fct.argtype = (ndpointer(dtype=ctypes.c_uint8, shape=(len(x),)),
                    ctypes.c_uint64, 
                    ndpointer(dtype=ctypes.c_double, shape=(k,)),
