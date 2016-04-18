@@ -30,7 +30,8 @@ def aCorrUpTo(x, k, n=None):
     """
     assert n in [None]+range(0,8) and k>0, \
            "Invalid n or k. Condition is: n in [None]+range(0,8) and k>0"
-    n = int(n) # If n = 3.0 it passes the assertion so we make it 3
+    if isinstance(n, float):
+        n = int(n) # If n = 3.0 it passes the assertion so we make it 3
     fct = lib.aCorrUpTo if n is None else lib.aCorrUpToBit
     fct.argtype = (ndpointer(dtype=ctypes.c_uint8, shape=(len(x),)),
                    ctypes.c_uint64, 
