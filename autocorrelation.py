@@ -33,13 +33,20 @@ def aCorrUpTo(x, k, n=None):
     if isinstance(n, float):
         n = int(n) # If n = 3.0 it passes the assertion so we make it 3
     fct = lib.aCorrUpTo if n is None else lib.aCorrUpToBit
-    fct.argtype = (ndpointer(dtype=ctypes.c_uint8, shape=(len(x),)),
-                   ctypes.c_uint64, 
-                   ndpointer(dtype=ctypes.c_double, shape=(k,)),
-                   ctypes.c_int64)
+    if n is None:
+        fct.argtypes = (ndpointer(dtype=ctypes.c_uint8, shape=(len(x),)),
+                       ctypes.c_uint64, 
+                       ndpointer(dtype=ctypes.c_double, shape=(k,)),
+                       ctypes.c_int)
+    else:
+        fct.argtypes = (ndpointer(dtype=ctypes.c_uint8, shape=(len(x),)),
+                       ctypes.c_uint64, 
+                       ndpointer(dtype=ctypes.c_double, shape=(k,)),
+                       ctypes.c_int,
+                       ctypes.c_int)
 
-    r = zeros(k).tostring()
-    fct(x, ctypes.c_uint64(len(x)), r, k) if n is None else fct(x, ctypes.c_uint64(len(x)), r, k, n)
+    r = zeros(k)#.tostring()
+    fct(x, len(x), r, k) if n is None else fct(x, len(x), r, k, n)
 
     return fromstring(r)
 
