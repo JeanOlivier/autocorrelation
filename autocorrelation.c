@@ -227,8 +227,8 @@ void aCorrUpToBit( uint8_t *buffer, uint64_t n, double *r, int k , int NthB)
 {
     #define BITMASK(A) (A>>NthB & 1)
     #define AND(A,B) (A & B)
-    #define BITMASK_AND(A,B) AND(BITMASK(A), BITMASK(B))
-    //#define BITMASK_AND(A,B) BITMASK(AND(A,B)) // Should be slightly faster
+    //#define BITMASK_AND(A,B) AND(BITMASK(A), BITMASK(B))
+    #define BITMASK_AND(A,B) BITMASK(AND(A,B)) // Should be slightly faster
 
     // Accumulators
     uint64_t m = 0;
