@@ -159,32 +159,24 @@ void aCorrUpTo( uint8_t *buffer, uint64_t n, double *r, int k )
     // Accumulating...
     #pragma omp parallel // Mods made for omp can be suboptimal for single thread
     {
-        // Local arrays avoid race conditions and segfault problems
-        uint64_t *rk_local = (uint64_t *) calloc(k, sizeof(uint64_t));
-        #pragma omp for reduction(+:m)
+        #pragma omp for reduction(+:m), reduction(+:rk[:k])
         for (uint64_t i=0; i<n-k; i++)
         {
             m += (uint64_t)buffer[i];
             for (uint64_t j=0; j<k; j++)
             {
-                rk_local[j] += (uint64_t)buffer[i]*(uint64_t)buffer[i+j];
+                rk[j] += (uint64_t)buffer[i]*(uint64_t)buffer[i+j];
             }
         }
-        #pragma omp for reduction(+:m)
+        #pragma omp for reduction(+:m), reduction(+:rk[:k])
         for (uint64_t i=n-k; i<n; i++)
         {
             m += (uint64_t)buffer[i];
             for ( uint64_t j=0; j<n-i; j++)
             {
-                rk_local[j] += (uint64_t)buffer[i]*(uint64_t)buffer[i+j];
+                rk[j] += (uint64_t)buffer[i]*(uint64_t)buffer[i+j];
             }
         }
-        #pragma omp critical // Manual reduction of local arrays to the main one
-        for (uint64_t j=0; j<k; j++)
-        {
-            rk[j] += rk_local[j];
-        }
-        free(rk_local);
     }
 
     // Computing correlations using MPFR 256bits precision floats ...
@@ -241,32 +233,24 @@ void aCorrUpToBit( uint8_t *buffer, uint64_t n, double *r, int k , int NthB)
     // Accumulating...
     #pragma omp parallel // Mods made for omp can be suboptimal for single thread
     {
-        // Local arrays avoid race conditions and segfault problems
-        uint64_t *rk_local = (uint64_t *) calloc(k, sizeof(uint64_t));
-        #pragma omp for reduction(+:m)
+        #pragma omp for reduction(+:m), reduction(+:rk[:k])
         for (uint64_t i=0; i<n-k; i++)
         {
             m += (uint64_t)BITMASK(buffer[i]);
             for (uint64_t j=0; j<k; j++)
             {
-                rk_local[j] += (uint64_t)BITMASK_AND(buffer[i], buffer[i+j]);
+                rk[j] += (uint64_t)BITMASK_AND(buffer[i], buffer[i+j]);
             }
         }
-        #pragma omp for reduction(+:m)
+        #pragma omp for reduction(+:m), reduction(+:rk[:k])
         for (uint64_t i=n-k; i<n; i++)
         {
             m += (uint64_t)BITMASK(buffer[i]);
             for ( uint64_t j=0; j<n-i; j++)
             {
-                rk_local[j] += (uint64_t)BITMASK_AND(buffer[i], buffer[i+j]);
+                rk[j] += (uint64_t)BITMASK_AND(buffer[i], buffer[i+j]);
             }
         }
-        #pragma omp critical // Manual reduction of local arrays to the main one
-        for (uint64_t j=0; j<k; j++)
-        {
-            rk[j] += rk_local[j];
-        }
-        free(rk_local);
     }
 
     // Computing correlations using MPFR 256bits precision floats ...
@@ -444,11 +428,12 @@ int main(int argc, char *argv[])
    printf("%0.15f])\n",f[k-1]);
 
    free(f);
-
+   
+	
    ///////////////////////
    // aCorrUpToBit TEST //
    ///////////////////////
-
+/*
    // Result buffer, filled with 0 for compatibility with *_double* versions.   
    double *g = (double *) calloc(k, sizeof(double)); 
    aCorrUpToBit(buffer, size, g, k, 0);
@@ -474,7 +459,7 @@ int main(int argc, char *argv[])
    printf("%0.15f])\n",h[k-1]);
 
    free(h);
-
+*/
   
    /*
    f = aCorrUpToBit(buffer, size, k, 7);
@@ -487,19 +472,12 @@ int main(int argc, char *argv[])
    printf("%0.15f])\n",f[k-1]);
    */
 
-   
-   
-   /*f = aCorrUpTo_double(buffer, size, k);
-   // Printing an easy to paste into python format, for testing.
-   printf("\nDouble:\nf = array([");
-   for (int i=0; i<k-1 ; i++)
-   {
-     printf("%0.15f, ", f[i]);
-   }
-   printf("%0.15f])\n",f[k-1]);
-   
-      
-   free(f);*/
+   // To test using "exact" double method. 
+   // The parallel method might be more precise thanks to mpfr.
+   // Both should match for the first several decimals.
+   /*double g=0;
+   g = aCorrk_double(buffer, size, k-1);
+   printf("\n\n%0.15f",g);*/
 
    return 0;
 }
