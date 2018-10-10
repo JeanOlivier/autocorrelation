@@ -27,8 +27,6 @@
 
 // Timing for benchmarking
 #include <time.h>
-#include <utime.h>
-
 
 
 #define __STDC_FORMAT_MACROS
@@ -164,7 +162,6 @@ double aCorrk(uint8_t *buffer, uint64_t size, int k)
 
 void aCorrUpTo( uint8_t *buffer, uint64_t n, double *r, int k )
 {
-
     // Accumulators
     uint64_t m = 0;
     uint64_t *rk = (uint64_t *) calloc(k, sizeof(uint64_t)); // Filled with 0s.
@@ -262,6 +259,17 @@ void aCorrUpToBit( uint8_t *buffer, uint64_t n, double *r, int k , int NthB)
     // Accumulating...
     #pragma omp parallel // Mods made for omp can be suboptimal for single thread
     {
+        #ifdef __MINGW64__
+        int tid = omp_get_thread_num(); // Internal omp thread number
+        HANDLE thandle = GetCurrentThread();
+        _Bool result;
+        
+        GROUP_AFFINITY group = {0x0000000FFFFFFFFF, 0};
+        group.Group = (tid<36)?0:1;
+        result = SetThreadGroupAffinity(thandle, &group, NULL);
+        if(!result) fprintf(stderr, "Failed setting output for tid=%i\n", tid);
+        #endif
+
         #pragma omp for reduction(+:m), reduction(+:rk[:k])
         for (uint64_t i=0; i<n-k; i++)
         {
