@@ -1,8 +1,17 @@
-#ifdef UNIX
+#ifdef unix
     #define __USE_LARGEFILE64
     #define _LARGEFILE_SOURCE
     #define _LARGEFILE64_SOURCE
 #endif 
+
+//#ifdef WINNT
+#ifdef __MINGW64__
+    // see number from: sdkddkver.h
+    // https://docs.microsoft.com/fr-fr/windows/desktop/WinProg/using-the-windows-headers
+    #define _WIN32_WINNT 0x0602 // Windows 8
+    #include <Processtopologyapi.h>
+    #include <processthreadsapi.h>
+#endif
 
 #include <stdio.h> 
 #include <stdlib.h>
@@ -10,10 +19,17 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include "gmp.h"
-#include "mpfr.h"
+#include <string.h>
 
+//#include "gmp.h"
+#include "mpfr.h"
 #include <omp.h>
+
+// Timing for benchmarking
+#include <time.h>
+#include <utime.h>
+
+
 
 #define __STDC_FORMAT_MACROS
 #include <inttypes.h>
@@ -21,15 +37,15 @@
 #define handle_error(msg) \
   do { perror(msg); exit(EXIT_FAILURE); } while (0)
 
-     
+      
+      
 // Compile binary:
-//   gcc -O3 autocorrelation.c -o autocorrelation.out -Wall -lmpfr -lgmp
+//   gcc -O3 -march=native autocorrelation.c -o autocorrelation.out -Wall -lmpfr -fopenmp -fopenmp-simp
 //
 // Compile shared library:
-//   gcc -O3 -fPIC -shared autocorrelation.c -o autocorrelation.so -Wall -lmpfr -lgmp
+//   gcc -O3 -march=native -fPIC -shared autocorrelation.c -o autocorrelation.so -Wall -lmpfr -fopenmp -fopenmp-simp
 //
-// Linux -> add -DUNIX
-// OpenMP paralellization -> add -fopenmp
+// Linux -> *unix* should be set, otherwise use -Dunix
 
 double mean( uint8_t *buffer, uint64_t size)
 {
@@ -148,6 +164,7 @@ double aCorrk(uint8_t *buffer, uint64_t size, int k)
 
 void aCorrUpTo( uint8_t *buffer, uint64_t n, double *r, int k )
 {
+
     // Accumulators
     uint64_t m = 0;
     uint64_t *rk = (uint64_t *) calloc(k, sizeof(uint64_t)); // Filled with 0s.
@@ -156,9 +173,21 @@ void aCorrUpTo( uint8_t *buffer, uint64_t n, double *r, int k )
     mpfr_t R,Rk,M,N,K,Bk,V; // High precision floats for final calculation
     mpfr_inits2(256, R, Rk, M, N, K, Bk, V, NULL); // 256bits floats, ~71 decimal digits
     
+    
     // Accumulating...
     #pragma omp parallel // Mods made for omp can be suboptimal for single thread
     {
+        #ifdef __MINGW64__
+        int tid = omp_get_thread_num(); // Internal omp thread number
+        HANDLE thandle = GetCurrentThread();
+        _Bool result;
+        
+        GROUP_AFFINITY group = {0x0000000FFFFFFFFF, 0};
+        group.Group = (tid<36)?0:1;
+        result = SetThreadGroupAffinity(thandle, &group, NULL);
+        if(!result) fprintf(stderr, "Failed setting output for tid=%i\n", tid);
+        #endif
+        
         #pragma omp for reduction(+:m), reduction(+:rk[:k])
         for (uint64_t i=0; i<n-k; i++)
         {
@@ -360,124 +389,153 @@ int readBig(uint8_t *buffer, uint64_t size, FILE *fp)
 
 int main(int argc, char *argv[])
 {
-   FILE *fp;
-   int fd;
-   uint64_t size;
-
-   fp = fopen(argv[1], "rb");
-   #ifdef __CYGWIN__
-       struct stat sb;
-       fd = fileno(fp);
-       fstat(fd, &sb);
-   #elif UNIX
-       struct stat64 sb;
-       fd = fileno(fp);
-       fstat64(fd, &sb);
-   #else
-       struct __stat64 sb;
-       fd = _fileno(fp);
-       _fstat64(fd, &sb);
-   #endif
-   size = (uint64_t)sb.st_size;
-
-   uint8_t *buffer = (uint8_t *) malloc(sizeof(uint8_t)*size);
-   if ( !readBig(buffer, size, fp) )
-   {
-       exit(1);
-   }
-   fclose(fp);
-
-   #ifdef DEBUG
-       for(uint64_t i = 0; i < 10; i++)
-       {
-         printf("[%"PRIu64"]=%X ", i, buffer[i]);
-       }
-       printf("[%"PRIu64"]=%X", size-1, buffer[size-1]);
-       printf("\n");
-   #endif
+    // 1 - Reading the whole file into memory
+    FILE *fp;
+    int fd;
+    uint64_t size;
+ 
+    fp = fopen(argv[1], "rb");
+    #ifdef __CYGWIN__
+        struct stat sb;
+        fd = fileno(fp);
+        fstat(fd, &sb);
+    #elif unix
+        struct stat64 sb;
+        fd = fileno(fp);
+        fstat64(fd, &sb);
+    #else
+        struct __stat64 sb;
+        fd = _fileno(fp);
+        _fstat64(fd, &sb);
+    #endif
+    size = (uint64_t)sb.st_size;
+ 
+    uint8_t *buffer = (uint8_t *) malloc(sizeof(uint8_t)*size);
+    if ( !readBig(buffer, size, fp) )
+    {
+        exit(1);
+    }
+    fclose(fp);
+ 
+    #ifdef DEBUG
+        for(uint64_t i = 0; i < 10; i++)
+        {
+            printf("[%"PRIu64"]=%X ", i, buffer[i]);
+        }
+        printf("[%"PRIu64"]=%X", size-1, buffer[size-1]);
+        printf("\n");
+    #endif
+    
+    // The number of autocorrelations to compute
+    int k = 2;
+    if ( argc >= 3)
+    {
+        k=atoi(argv[2]);
+    }
+ 
+    /*
+    double g;
+    for (int i=0; i<100; i++)
+    {
+        g = mean(buffer, size);
+    }   
+    printf("\nMean: %0.20f\n",g);
+    */
+ 
+    
+    ////////////////////
+    // aCorrUpTo TEST //
+    //////////////////// 
+ 
+    // Result buffer, filled with 0 for compatibility with *_double* versions.   
+    double *f = (double *) calloc(k, sizeof(double)); 
+    // Timing stuff
+    struct timespec start, end;
+    double cpu_time_used;
+    int timeflag = 0;
+    
+    if ( strcmp(argv[argc-1], "time\0") == 0 )
+    {
+        timeflag = 1;
+    }
+    
+    if ( timeflag )
+    {
+        clock_gettime(CLOCK_MONOTONIC, &start);
+    }
+    // The computation itself!
+    aCorrUpTo(buffer, size, f, k);
+    // End of timing stuff
+    if ( timeflag )
+    {
+        clock_gettime(CLOCK_MONOTONIC, &end);
+        cpu_time_used = 1e-9*(end.tv_sec*1e9+end.tv_nsec - (start.tv_sec*1e9+start.tv_nsec));
+    }
+    // Printing an easy to paste into python format, for testing.
+    printf("\nByte:\nf = array([");
+    for (int i=0; i<k-1 ; i++)
+    {
+        printf("%0.15f, ", f[i]);
+    }
+    printf("%0.15f])\n",f[k-1]);
+    if ( timeflag )
+    {
+        printf("\nComputation took %0.9f seconds!\n", cpu_time_used);
+    }
+    
+    free(f);
+    
+     
+    ///////////////////////
+    // aCorrUpToBit TEST //
+    ///////////////////////
+/* 
+    // Result buffer, filled with 0 for compatibility with *_double* versions.   
+    double *g = (double *) calloc(k, sizeof(double)); 
+    aCorrUpToBit(buffer, size, g, k, 0);
+    // Printing an easy to paste into python format, for testing.
+    printf("\nbit0:\nf = array([");
+    for (int i=0; i<k-1 ; i++)
+    {
+      printf("%0.15f, ", g[i]);
+    }
+    printf("%0.15f])\n",g[k-1]);
+ 
+    free(g);
+ 
+    // Result buffer, filled with 0 for compatibility with *_double* versions.   
+    double *h = (double *) calloc(k, sizeof(double)); 
+    aCorrUpToBit(buffer, size, h, k, 7);
+    // Printing an easy to paste into python format, for testing.
+    printf("\nbit7:\nf = array([");
+    for (int i=0; i<k-1 ; i++)
+    {
+      printf("%0.15f, ", h[i]);
+    }
+    printf("%0.15f])\n",h[k-1]);
+ 
+    free(h);
+    */ 
    
-   int k = 1;
-   if ( argc == 3)
-   {
-       k=atoi(argv[2]);
-   }
-
-   /*
-   double g;
-   for (int i=0; i<100; i++)
-   {
-       g = mean(buffer, size);
-   }   
-   printf("\nMean: %0.20f\n",g);
-   */
-
-
-   ////////////////////
-   // aCorrUpTo TEST //
-   //////////////////// 
-
-   // Result buffer, filled with 0 for compatibility with *_double* versions.   
-   double *f = (double *) calloc(k, sizeof(double)); 
-   aCorrUpTo(buffer, size, f, k);
-   // Printing an easy to paste into python format, for testing.
-   printf("\nByte:\nf = array([");
-   for (int i=0; i<k-1 ; i++)
-   {
-     printf("%0.15f, ", f[i]);
-   }
-   printf("%0.15f])\n",f[k-1]);
-
-   free(f);
-   
-	
-   ///////////////////////
-   // aCorrUpToBit TEST //
-   ///////////////////////
-/*
-   // Result buffer, filled with 0 for compatibility with *_double* versions.   
-   double *g = (double *) calloc(k, sizeof(double)); 
-   aCorrUpToBit(buffer, size, g, k, 0);
-   // Printing an easy to paste into python format, for testing.
-   printf("\nbit0:\nf = array([");
-   for (int i=0; i<k-1 ; i++)
-   {
-     printf("%0.15f, ", g[i]);
-   }
-   printf("%0.15f])\n",g[k-1]);
-
-   free(g);
-
-   // Result buffer, filled with 0 for compatibility with *_double* versions.   
-   double *h = (double *) calloc(k, sizeof(double)); 
-   aCorrUpToBit(buffer, size, h, k, 7);
-   // Printing an easy to paste into python format, for testing.
-   printf("\nbit7:\nf = array([");
-   for (int i=0; i<k-1 ; i++)
-   {
-     printf("%0.15f, ", h[i]);
-   }
-   printf("%0.15f])\n",h[k-1]);
-
-   free(h);
-*/
-  
-   /*
-   f = aCorrUpToBit(buffer, size, k, 7);
-   // Printing an easy to paste into python format, for testing.
-   printf("\n7th bit:\nf = array([");
-   for (int i=0; i<k-1 ; i++)
-   {
-     printf("%0.15f, ", f[i]);
-   }
-   printf("%0.15f])\n",f[k-1]);
-   */
-
-   // To test using "exact" double method. 
-   // The parallel method might be more precise thanks to mpfr.
-   // Both should match for the first several decimals.
-   /*double g=0;
-   g = aCorrk_double(buffer, size, k-1);
-   printf("\n\n%0.15f",g);*/
-
-   return 0;
+    /*
+    f = aCorrUpToBit(buffer, size, k, 7);
+    // Printing an easy to paste into python format, for testing.
+    printf("\n7th bit:\nf = array([");
+    for (int i=0; i<k-1 ; i++)
+    {
+      printf("%0.15f, ", f[i]);
+    }
+    printf("%0.15f])\n",f[k-1]);
+    */
+ 
+    // To test using "exact" double method. 
+    // The parallel method might be more precise thanks to mpfr.
+    // Both should match for the first several decimals.
+    /*if ( argc >= 1000)
+    {
+        double g=0;
+        g = aCorrk_double(buffer, size, k-1);
+        printf("\n\n%0.15f",g);
+    }*/
+    return 0;
 }
