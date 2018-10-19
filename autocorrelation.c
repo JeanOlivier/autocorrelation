@@ -4,8 +4,10 @@
     #define _LARGEFILE64_SOURCE
 #endif 
 
-//#ifdef WINNT
-#ifdef __MINGW64__
+
+//#ifdef __MINGW64__
+//#ifndef unix
+#if defined(__CYGWIN__) || defined(__MINGW64__)
     // see number from: sdkddkver.h
     // https://docs.microsoft.com/fr-fr/windows/desktop/WinProg/using-the-windows-headers
     #define _WIN32_WINNT 0x0602 // Windows 8
@@ -25,8 +27,12 @@
 #include "mpfr.h"
 #include <omp.h>
 
+
 // Timing for benchmarking
 #include <time.h>
+
+// hwloc
+#include <hwloc.h>
 
 
 #define __STDC_FORMAT_MACROS
@@ -169,18 +175,19 @@ void aCorrUpTo( uint8_t *buffer, uint64_t n, double *r, int k )
 
     mpfr_t R,Rk,M,N,K,Bk,V; // High precision floats for final calculation
     mpfr_inits2(256, R, Rk, M, N, K, Bk, V, NULL); // 256bits floats, ~71 decimal digits
-    
-    
+   
     // Accumulating...
     #pragma omp parallel // Mods made for omp can be suboptimal for single thread
     {
-        #ifdef __MINGW64__
+        #ifdef _WIN32_WINNT
         int tid = omp_get_thread_num(); // Internal omp thread number
         HANDLE thandle = GetCurrentThread();
         _Bool result;
         
         GROUP_AFFINITY group = {0x0000000FFFFFFFFF, 0};
-        group.Group = (tid<36)?0:1;
+        //group.Group = (tid<36)?0:1; // This puts all threads after 36 into 2nd group. 
+        //group.Group = (tid/36)%2; // This fills sockets one after the other then over again regardless of HTT.
+        group.Group = tid%2; // Half-filling groups first. On Win10, it uses physical cores once first, then logical ones.
         result = SetThreadGroupAffinity(thandle, &group, NULL);
         if(!result) fprintf(stderr, "Failed setting output for tid=%i\n", tid);
         #endif
@@ -189,6 +196,7 @@ void aCorrUpTo( uint8_t *buffer, uint64_t n, double *r, int k )
         for (uint64_t i=0; i<n-k; i++)
         {
             m += (uint64_t)buffer[i];
+            //simdCorrJ(k, &buffer[i], rk);
             for (uint64_t j=0; j<k; j++)
             {
                 rk[j] += (uint64_t)buffer[i]*(uint64_t)buffer[i+j];
@@ -198,6 +206,7 @@ void aCorrUpTo( uint8_t *buffer, uint64_t n, double *r, int k )
         for (uint64_t i=n-k; i<n; i++)
         {
             m += (uint64_t)buffer[i];
+            //simdCorrJ(n-i, &buffer[i], rk);
             for ( uint64_t j=0; j<n-i; j++)
             {
                 rk[j] += (uint64_t)buffer[i]*(uint64_t)buffer[i+j];
@@ -259,13 +268,15 @@ void aCorrUpToBit( uint8_t *buffer, uint64_t n, double *r, int k , int NthB)
     // Accumulating...
     #pragma omp parallel // Mods made for omp can be suboptimal for single thread
     {
-        #ifdef __MINGW64__
+        #ifdef _WIN32_WINNT
         int tid = omp_get_thread_num(); // Internal omp thread number
         HANDLE thandle = GetCurrentThread();
         _Bool result;
         
         GROUP_AFFINITY group = {0x0000000FFFFFFFFF, 0};
-        group.Group = (tid<36)?0:1;
+        //group.Group = (tid<36)?0:1; // This puts all threads after 36 into 2nd group. 
+        //group.Group = (tid/36)%2; // This fills sockets one after the other then over again regardless of HTT.
+        group.Group = tid%2; // Half-filling groups first. On Win10, it uses physical cores once first, then logical ones.
         result = SetThreadGroupAffinity(thandle, &group, NULL);
         if(!result) fprintf(stderr, "Failed setting output for tid=%i\n", tid);
         #endif
@@ -477,7 +488,7 @@ int main(int argc, char *argv[])
     if ( timeflag )
     {
         clock_gettime(CLOCK_MONOTONIC, &end);
-        cpu_time_used = 1e-9*(end.tv_sec*1e9+end.tv_nsec - (start.tv_sec*1e9+start.tv_nsec));
+        cpu_time_used = (end.tv_sec+1e-9*end.tv_nsec - (start.tv_sec+1e-9*start.tv_nsec));
     }
     // Printing an easy to paste into python format, for testing.
     printf("\nByte:\nf = array([");
@@ -497,7 +508,7 @@ int main(int argc, char *argv[])
     ///////////////////////
     // aCorrUpToBit TEST //
     ///////////////////////
-/* 
+    /* 
     // Result buffer, filled with 0 for compatibility with *_double* versions.   
     double *g = (double *) calloc(k, sizeof(double)); 
     aCorrUpToBit(buffer, size, g, k, 0);
