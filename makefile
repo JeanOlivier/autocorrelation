@@ -37,4 +37,4 @@ clean:
 	@[ -f $(TARGET) ] && $(RM) $(TARGET) || true
 	@[ -f $(SHRTGT) ] && $(RM) $(SHRTGT) || true
 
-.PHONY: all clean force clean_target clean_shrtgt
+.PHONY: all clean force 
