@@ -32,7 +32,7 @@
 #include <time.h>
 
 // hwloc
-#include <hwloc.h>
+//#include <hwloc.h>
 
 
 #define __STDC_FORMAT_MACROS
@@ -40,7 +40,7 @@
 
 #define handle_error(msg) \
   do { perror(msg); exit(EXIT_FAILURE); } while (0)
-
+	  
 
 // Compile binary:
 //   gcc -O3 -march=native autocorrelation.c -o autocorrelation.out -Wall -lmpfr -fopenmp -fopenmp-simp
@@ -49,6 +49,55 @@
 //   gcc -O3 -march=native -fPIC -shared autocorrelation.c -o autocorrelation.so -Wall -lmpfr -fopenmp -fopenmp-simp
 //
 // Linux -> *unix* should be set, otherwise use -Dunix
+
+void manage_thread_affinity()
+{
+    #ifdef _WIN32_WINNT
+        /*
+        // Initializing topology
+        hwloc_topology_t topology;    
+        hwloc_topology_init(&topology);  // initialization
+        hwloc_topology_load(topology);   // actual detection
+        
+        // Finding the number of cores
+        int nbpackages, nbcores, nbthreads;
+        nbpackages = hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_PACKAGE);
+        nbcores = hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_CORE);
+        nbthreads = hwloc_get_nbobjs_by_type(topology, HWLOC_OBJ_PU);
+
+        // Destroying topology
+        hwloc_topology_destroy(topology);
+        */
+        
+        int nbgroups = GetActiveProcessorGroupCount();
+        int *threads_per_groups = (int *) malloc(nbgroups*sizeof(int));
+        for (int i=0; i<nbgroups; i++)
+        {
+            threads_per_groups[i] = GetActiveProcessorCount(i);
+        }
+
+        // Fetching thread number and assigning it to cores
+        int tid = omp_get_thread_num(); // Internal omp thread number (0 -- OMP_NUM_THREADS)
+        HANDLE thandle = GetCurrentThread();
+        _Bool result;
+        
+        int set_group = tid%nbgroups; // We change group for each thread
+        int nbthreads = threads_per_groups[set_group]; // Nb of threads in group for affinity mask.
+        GROUP_AFFINITY group = {((uint64_t)1<<nbthreads)-1, set_group}; // nbcores amount of 1 in binary
+        
+        result = SetThreadGroupAffinity(thandle, &group, NULL); // Actually setting the affinity
+        if(!result) fprintf(stderr, "Failed setting output for tid=%i\n", tid);
+        
+        //GROUP_AFFINITY group = {0x0000000FFFFFFFFF, 0};
+        //GROUP_AFFINITY group = {((uint64_t)1<<nbcores)-1, 0}; // nbcores amount of 1 in binary
+        //group.Group = (tid<36)?0:1; // This puts all threads after 36 into 2nd group. 
+        //group.Group = (tid/36)%2; // This fills sockets one after the other then over again regardless of HTT.
+        //group.Group = tid%nbgroups; // Half-filling groups first. On Win10, it uses physical cores once first, then logical ones.
+
+    #else
+        //We let openmp and the OS manage the threads themselves
+    #endif
+}
 
 double mean( uint8_t *buffer, uint64_t size)
 {
@@ -177,20 +226,8 @@ void aCorrUpTo( uint8_t *buffer, uint64_t n, double *r, int k )
    
     // Accumulating...
     #pragma omp parallel // Mods made for omp can be suboptimal for single thread
-    {
-        #ifdef _WIN32_WINNT
-        int tid = omp_get_thread_num(); // Internal omp thread number
-        HANDLE thandle = GetCurrentThread();
-        _Bool result;
-        
-        GROUP_AFFINITY group = {0x0000000FFFFFFFFF, 0};
-        //group.Group = (tid<36)?0:1; // This puts all threads after 36 into 2nd group. 
-        //group.Group = (tid/36)%2; // This fills sockets one after the other then over again regardless of HTT.
-        group.Group = tid%2; // Half-filling groups first. On Win10, it uses physical cores once first, then logical ones.
-        result = SetThreadGroupAffinity(thandle, &group, NULL);
-        if(!result) fprintf(stderr, "Failed setting output for tid=%i\n", tid);
-        #endif
-        
+    {   
+        manage_thread_affinity(); // Assigning threads to cores using SetThreadGroupAffinity and hwloc
         #pragma omp for reduction(+:m), reduction(+:rk[:k])
         for (uint64_t i=0; i<n-k; i++)
         {
@@ -265,19 +302,7 @@ void aCorrUpToBit( uint8_t *buffer, uint64_t n, double *r, int k , int NthB)
     // Accumulating...
     #pragma omp parallel // Mods made for omp can be suboptimal for single thread
     {
-        #ifdef _WIN32_WINNT
-        int tid = omp_get_thread_num(); // Internal omp thread number
-        HANDLE thandle = GetCurrentThread();
-        _Bool result;
-        
-        GROUP_AFFINITY group = {0x0000000FFFFFFFFF, 0};
-        //group.Group = (tid<36)?0:1; // This puts all threads after 36 into 2nd group. 
-        //group.Group = (tid/36)%2; // This fills sockets one after the other then over again regardless of HTT.
-        group.Group = tid%2; // Half-filling groups first. On Win10, it uses physical cores once first, then logical ones.
-        result = SetThreadGroupAffinity(thandle, &group, NULL);
-        if(!result) fprintf(stderr, "Failed setting output for tid=%i\n", tid);
-        #endif
-
+        manage_thread_affinity(); // Assigning threads to cores using SetThreadGroupAffinity and hwloc
         #pragma omp for reduction(+:m), reduction(+:rk[:k])
         for (uint64_t i=0; i<n-k; i++)
         {
@@ -420,57 +445,61 @@ int readBig(uint8_t *buffer, uint64_t size, FILE *fp)
 int main(int argc, char *argv[])
 {
     // 1 - Reading the whole file into memory or generating random data
-	uint8_t *buffer;
-	uint64_t size = 0;
-	if ( strcmp(argv[1], "random\0") == 0 )
-	{
+    uint8_t *buffer;
+    uint64_t size = 0;
+    if ( strcmp(argv[1], "random\0") == 0 )
+    {
         // Fake random file, reproducible thanks to fast_srand
-		size = ((uint64_t) 1)<<30; // 2^30 -> 1 Giga
-		fast_srand(0); // for reproducibility
-		buffer = (uint8_t *) malloc(sizeof(uint8_t)*size);
-        #pragma omp parallel for // Why not?
-		for (uint64_t i=0; i<size; i+=8)
-		{
-			buffer[i] = fast_rand()%256; // wasting a big of resources
-		}
-	}
-	else
-	{
-		FILE *fp;
-		int fd;
-		fp = fopen(argv[1], "rb");
-		#ifdef __CYGWIN__
-			struct stat sb;
-			fd = fileno(fp);
-			fstat(fd, &sb);
-		#elif unix
-			struct stat64 sb;
-			fd = fileno(fp);
-			fstat64(fd, &sb);
-		#else
-			struct __stat64 sb;
-			fd = _fileno(fp);
-			_fstat64(fd, &sb);
-		#endif
-		size = (uint64_t)sb.st_size;
-	 
-		buffer = (uint8_t *) malloc(sizeof(uint8_t)*size);
-		if ( !readBig(buffer, size, fp) )
-		{
-			printf("There was an error reading the input file!");
-			exit(1);
-		}
-		fclose(fp);
+        size = ((uint64_t) 1)<<30; // 2^30 -> 1 Giga
+        fast_srand(0); // for reproducibility
+        buffer = (uint8_t *) malloc(sizeof(uint8_t)*size);
+        #pragma omp parallel // Why not? 
+        {
+            manage_thread_affinity();
+            #pragma omp for 
+            for (uint64_t i=0; i<size; i+=8)
+            {
+                buffer[i] = fast_rand()%256; // wasting a big of resources
+            }
+        }
+    }
+    else
+    {
+        FILE *fp;
+        int fd;
+        fp = fopen(argv[1], "rb");
+        #ifdef __CYGWIN__
+            struct stat sb;
+            fd = fileno(fp);
+            fstat(fd, &sb);
+        #elif unix
+            struct stat64 sb;
+            fd = fileno(fp);
+            fstat64(fd, &sb);
+        #else
+            struct __stat64 sb;
+            fd = _fileno(fp);
+            _fstat64(fd, &sb);
+        #endif
+        size = (uint64_t)sb.st_size;
+     
+        buffer = (uint8_t *) malloc(sizeof(uint8_t)*size);
+        if ( !readBig(buffer, size, fp) )
+        {
+            printf("There was an error reading the input file!");
+            exit(1);
+        }
+        fclose(fp);
     }
     #ifdef DEBUG
-    	for(uint64_t i = 0; i < 10; i++)
-    	{
-    		printf("[%"PRIu64"]=%X ", i, buffer[i]);
-    	}
-    	printf("[%"PRIu64"]=%X", size-1, buffer[size-1]);
-    	printf("\n");
+        for(uint64_t i = 0; i < 10; i++)
+        {
+            printf("[%"PRIu64"]=%X ", i, buffer[i]);
+        }
+        printf("[%"PRIu64"]=%X", size-1, buffer[size-1]);
+        printf("\n");
     #endif
-	
+    
     
     // The number of autocorrelations to compute
     int k = 2;
