@@ -32,6 +32,11 @@ In the ![](https://latex.codecogs.com/gif.latex?k=1) case, it falls back to the 
 - `openMP` is used for parallelisation; some of the code might be suboptimal for single threaded execution.
 
 ## Compiling
+### Using make
+
+Simply execute `make all`
+
+### Manually
 - To compile a binary: `gcc -O3 autocorrelation.c -o autocorrelation.out -Wall -lmpfr -lgmp -fopenmp`
 - To compile a shared library: `gcc -O3 -fPIC -shared autocorrelation.c -o autocorrelation.so -Wall -lmpfr -lgmp -fopenmp`
 
