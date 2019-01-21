@@ -22,7 +22,7 @@ with
 
 in order to speed up calculations with simple parallelizable forms for ![](https://latex.codecogs.com/gif.latex?r_k) and ![](https://latex.codecogs.com/gif.latex?M) and correcting for the induced errors using the relatively simple ![](https://latex.codecogs.com/gif.latex?\gamma_k) and ![](https://latex.codecogs.com/gif.latex?\beta_k).
 
-In the ![](https://latex.codecogs.com/gif.latex?k=1) case, it falls back to the variance normalized by itself (a.k.a. `1`) and the corrections vanish.
+In the ![](https://latex.codecogs.com/gif.latex?k=0) case, it falls back to the variance normalized by itself (a.k.a. `1`) and the corrections vanish.
 
 ## Other details
 
