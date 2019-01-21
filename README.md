@@ -10,7 +10,7 @@ The algorithm used is the following:
 
 ![](https://latex.codecogs.com/gif.latex?a_k%20%3D%20%5Cfrac%7B1%7D%7B%28N-k%29%5Csigma%5E2%7D%5Csum_%7Bi%3D1%7D%5E%7BN-k%7D%28x_i-%5Clangle%20x%5Crangle%29%28x_%7Bi&plus;k%7D-%5Clangle%20x%5Crangle%29),
 
-where ![](https://latex.codecogs.com/gif.latex?x_k) is the ![](https://latex.codecogs.com/gif.latex?k^\text{th}) point of the signal, ![](https://latex.codecogs.com/gif.latex?N) is its length, ![](https://latex.codecogs.com/gif.latex?\langle%20x\rangle) is its mean, and ![](https://latex.codecogs.com/gif.latex?\sigma^2) is its variance.
+where ![](https://latex.codecogs.com/gif.latex?x_i) is the ![](https://latex.codecogs.com/gif.latex?i^\text{th}) point of the signal, ![](https://latex.codecogs.com/gif.latex?N) is its length, ![](https://latex.codecogs.com/gif.latex?\langle%20x\rangle) is its mean, and ![](https://latex.codecogs.com/gif.latex?\sigma^2) is its variance.
 
 We re-express it as :
 
